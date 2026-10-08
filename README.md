@@ -15,9 +15,12 @@ A TradingView indicator (Pine Script v6) that maps a chart the way a Smart Money
 | Premium / discount | Optional boxes for the upper and lower half of the current leg |
 | Signals | `BUY MKT 5/7` or `SELL LMT 4/7`; hover for the full checklist, order type and levels |
 | Trade plan | Position-tool style risk / reward shading with entry (dashed while a limit is pending), SL, TP1, TP2; finished trades shrink to a result label like `TP2 hit +2.4R` |
+| Trade card | Side panel for the latest setup: entry, SL, TP1, TP2 in price, pips and R, plus why the trade, why market or limit, why that stop, why those targets |
 | Dashboard | Bias, structure, HTF, fib, P/D, nearest BSL/SSL, killzone, active zones, candle, live scores, open setup, last signal, results in R |
 
 ## Install on TradingView
+
+Quickest way: open [`src/smc_confluence_mapper.pine`](src/smc_confluence_mapper.pine) on GitHub, click the **Copy raw file** button (top-right of the code view), then paste into the Pine Editor.
 
 1. Open a chart, then the **Pine Editor** tab at the bottom.
 2. Create a new indicator, delete the template, paste the whole of `src/smc_confluence_mapper.pine`.

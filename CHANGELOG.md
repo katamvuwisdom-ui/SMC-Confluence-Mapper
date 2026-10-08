@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.0] - 2026-10-08
+
+### Added
+- Trade card: side panel with the latest setup — side, order type and status; entry, stop loss, TP1, TP2 with price, pips and R; risk:reward; confluence score; and plain-language reasons (confluence checklist, why market or limit, why that stop, why those targets).
+- Pip calculation: auto pip size (forex 0.0001 / JPY 0.01, gold 0.1, other symbols 1 tick) with a manual override.
+- Pip distances in the signal tooltip.
+
+### Changed
+- All chart text (labels, box text, dashboard, card) uses one Text colour setting, white by default.
+
 ## [2.0.0] - 2026-10-08
 
 ### Added
