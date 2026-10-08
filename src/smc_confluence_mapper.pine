@@ -538,38 +538,46 @@ downAt(int o) =>
 upAt(int o) =>
     close[o] > sma10[o] and close[o] > close[o + 5]
 
+// Evaluated once per bar so every pattern sees a consistent value
+dn1 = downAt(1)
+dn2 = downAt(2)
+dn3 = downAt(3)
+up1 = upAt(1)
+up2 = upAt(2)
+up3 = upAt(3)
+
 // Hammer family: lower shadow ≥ 2× body, little or no upper shadow (≤ 10% of range)
 hammerShape   = okSize and body >= rng * 0.05 and loW >= body * 2 and upW <= rng * 0.1
 // Shooting-star family: upper shadow ≥ 2× body, little or no lower shadow
 starShape     = okSize and body >= rng * 0.05 and upW >= body * 2 and loW <= rng * 0.1
-hammer        = hammerShape and downAt(1)
-hangingMan    = hammerShape and upAt(1)
-shootingStar  = starShape and upAt(1)
-invHammer     = starShape and downAt(1)
+hammer        = hammerShape and dn1
+hangingMan    = hammerShape and up1
+shootingStar  = starShape and up1
+invHammer     = starShape and dn1
 // Engulfing: second real body completely covers the first real body, opposite colour
-bullEngulf    = downAt(1) and isBear[1] and isBull and body[1] >= avgBody[1] * 0.3 and open <= close[1] and close >= open[1] and body > body[1]
-bearEngulf    = upAt(1) and isBull[1] and isBear and body[1] >= avgBody[1] * 0.3 and open >= close[1] and close <= open[1] and body > body[1]
+bullEngulf    = dn1 and isBear[1] and isBull and body[1] >= avgBody[1] * 0.3 and open <= close[1] and close >= open[1] and body > body[1]
+bearEngulf    = up1 and isBull[1] and isBear and body[1] >= avgBody[1] * 0.3 and open >= close[1] and close <= open[1] and body > body[1]
 // Harami: long first candle, small second real body inside the first real body
-bullHarami    = downAt(1) and isBear[1] and body[1] >= avgBody[1] and isBull and bodyTop <= open[1] and bodyBot >= close[1] and body <= body[1] * 0.5
-bearHarami    = upAt(1) and isBull[1] and body[1] >= avgBody[1] and isBear and bodyTop <= close[1] and bodyBot >= open[1] and body <= body[1] * 0.5
+bullHarami    = dn1 and isBear[1] and body[1] >= avgBody[1] and isBull and bodyTop <= open[1] and bodyBot >= close[1] and body <= body[1] * 0.5
+bearHarami    = up1 and isBull[1] and body[1] >= avgBody[1] and isBear and bodyTop <= close[1] and bodyBot >= open[1] and body <= body[1] * 0.5
 // Piercing / dark cloud: long first candle, second closes past the midpoint of the first body
-piercing      = downAt(1) and isBear[1] and body[1] >= avgBody[1] and isBull and open <= close[1] and close > (open[1] + close[1]) / 2 and close < open[1]
-darkCloud     = upAt(1) and isBull[1] and body[1] >= avgBody[1] and isBear and open >= close[1] and close < (open[1] + close[1]) / 2 and close > open[1]
+piercing      = dn1 and isBear[1] and body[1] >= avgBody[1] and isBull and open <= close[1] and close > (open[1] + close[1]) / 2 and close < open[1]
+darkCloud     = up1 and isBull[1] and body[1] >= avgBody[1] and isBear and open >= close[1] and close < (open[1] + close[1]) / 2 and close > open[1]
 // Stars: long candle, small-bodied star beyond its body, strong candle closing past the first body's midpoint
-morningStar   = downAt(2) and isBear[2] and body[2] >= avgBody[2] and body[1] <= body[2] * 0.3 and bodyTop[1] <= close[2] + body[2] * 0.25 and isBull and body >= avgBody * 0.6 and close > (open[2] + close[2]) / 2
-eveningStar   = upAt(2) and isBull[2] and body[2] >= avgBody[2] and body[1] <= body[2] * 0.3 and bodyBot[1] >= close[2] - body[2] * 0.25 and isBear and body >= avgBody * 0.6 and close < (open[2] + close[2]) / 2
+morningStar   = dn2 and isBear[2] and body[2] >= avgBody[2] and body[1] <= body[2] * 0.3 and bodyTop[1] <= close[2] + body[2] * 0.25 and isBull and body >= avgBody * 0.6 and close > (open[2] + close[2]) / 2
+eveningStar   = up2 and isBull[2] and body[2] >= avgBody[2] and body[1] <= body[2] * 0.3 and bodyBot[1] >= close[2] - body[2] * 0.25 and isBear and body >= avgBody * 0.6 and close < (open[2] + close[2]) / 2
 // Three soldiers / crows: three long candles, each opening inside the prior body and closing near its extreme
-threeSoldiers = downAt(3) and isBull and isBull[1] and isBull[2] and close > close[1] and close[1] > close[2] and open >= open[1] and open <= close[1] and open[1] >= open[2] and open[1] <= close[2] and body >= avgBody * 0.8 and body[1] >= avgBody[1] * 0.8 and body[2] >= avgBody[2] * 0.8 and upW <= rng * 0.25 and upW[1] <= rng[1] * 0.25 and upW[2] <= rng[2] * 0.25
-threeCrows    = upAt(3) and isBear and isBear[1] and isBear[2] and close < close[1] and close[1] < close[2] and open <= open[1] and open >= close[1] and open[1] <= open[2] and open[1] >= close[2] and body >= avgBody * 0.8 and body[1] >= avgBody[1] * 0.8 and body[2] >= avgBody[2] * 0.8 and loW <= rng * 0.25 and loW[1] <= rng[1] * 0.25 and loW[2] <= rng[2] * 0.25
+threeSoldiers = dn3 and isBull and isBull[1] and isBull[2] and close > close[1] and close[1] > close[2] and open >= open[1] and open <= close[1] and open[1] >= open[2] and open[1] <= close[2] and body >= avgBody * 0.8 and body[1] >= avgBody[1] * 0.8 and body[2] >= avgBody[2] * 0.8 and upW <= rng * 0.25 and upW[1] <= rng[1] * 0.25 and upW[2] <= rng[2] * 0.25
+threeCrows    = up3 and isBear and isBear[1] and isBear[2] and close < close[1] and close[1] < close[2] and open <= open[1] and open >= close[1] and open[1] <= open[2] and open[1] >= close[2] and body >= avgBody * 0.8 and body[1] >= avgBody[1] * 0.8 and body[2] >= avgBody[2] * 0.8 and loW <= rng * 0.25 and loW[1] <= rng[1] * 0.25 and loW[2] <= rng[2] * 0.25
 // Marubozu: all body, almost no shadows, clearly larger than average
 bullMarubozu  = isBull and okSize and body >= rng * 0.9 and body >= avgBody * 1.3
 bearMarubozu  = isBear and okSize and body >= rng * 0.9 and body >= avgBody * 1.3
 // Tweezers: two candles of opposite colour sharing the same low / high, which is the 5-bar extreme
-tweezerBottom = downAt(1) and isBear[1] and isBull and math.abs(low - low[1]) <= rng * 0.05 and math.min(low, low[1]) <= low5
-tweezerTop    = upAt(1) and isBull[1] and isBear and math.abs(high - high[1]) <= rng * 0.05 and math.max(high, high[1]) >= high5
+tweezerBottom = dn1 and isBear[1] and isBull and math.abs(low - low[1]) <= rng * 0.05 and math.min(low, low[1]) <= low5
+tweezerTop    = up1 and isBull[1] and isBear and math.abs(high - high[1]) <= rng * 0.05 and math.max(high, high[1]) >= high5
 // Dragonfly / gravestone doji: almost no body, one long shadow, no opposite shadow
-dragonfly     = okSize and body <= rng * 0.05 and upW <= rng * 0.1 and downAt(1)
-gravestone    = okSize and body <= rng * 0.05 and loW <= rng * 0.1 and upAt(1)
+dragonfly     = okSize and body <= rng * 0.05 and upW <= rng * 0.1 and dn1
+gravestone    = okSize and body <= rng * 0.05 and loW <= rng * 0.1 and up1
 
 // Strongest pattern wins when several fire on the same bar.
 string bullPat = useStar and morningStar ? "Morning Star" : useThree and threeSoldiers ? "3 White Soldiers" : useEngulf and bullEngulf ? "Bullish Engulfing" : usePiercing and piercing ? "Piercing Line" : usePin and hammer ? "Hammer" : usePin and invHammer ? "Inverted Hammer" : useTweezer and tweezerBottom ? "Tweezer Bottom" : useMarubozu and bullMarubozu ? "Bullish Marubozu" : useHarami and bullHarami ? "Bullish Harami" : useDoji and dragonfly ? "Dragonfly Doji" : ""
