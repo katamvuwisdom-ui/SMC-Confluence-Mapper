@@ -16,7 +16,7 @@ A TradingView indicator (Pine Script v6) that maps a chart the way a Smart Money
 | Signals | `BUY MKT 5/7` or `SELL LMT 4/7`; hover for the full checklist, order type and levels |
 | Trade plan | Position-tool style risk / reward shading with entry (dashed while a limit is pending), SL, TP1, TP2; finished trades shrink to a result label like `TP2 hit +2.4R` |
 | Trade card | Side panel for the latest setup: entry, SL, TP1, TP2 in price, pips and R, plus why the trade, why market or limit, why that stop, why those targets |
-| Dashboard | Bias, structure, HTF, fib, P/D, nearest BSL/SSL, killzone, active zones, candle, live scores, open setup, last signal, results in R |
+| Expected path | Arrowed path from current price to entry, TP1 and TP2 for the live setup |
 
 ## Install on TradingView
 

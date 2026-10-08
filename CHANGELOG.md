@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.0.0] - 2026-10-08
+
+### Added
+- Entry model "Sweep → Shift → Retrace" (default): liquidity sweep, then structure break the other way, then entry on the pullback into a zone.
+- Plain-language trade card: entry with date and time, stop and targets in price, pips and R, the reasons in simple words, the plan step by step, and the track record.
+- Expected path drawn from current price to entry, TP1 and TP2.
+- 50% line (mean threshold / consequent encroachment) inside order blocks and FVGs.
+- Hanging Man and Inverted Hammer patterns; plain-language meaning for every pattern.
+- Alert message format: plain text (copy and share) or JSON for a webhook bridge.
+
+### Changed
+- Candlestick patterns rebuilt from textbook definitions with prior-trend context and a minimum candle size.
+- Order blocks use only the OB candle's own range (no longer stretched to the leg extreme). Max height 1.5 × ATR; 2 per side.
+- Trade labels are filled, high-contrast badges showing price, pips, R and time. Vivid default colours.
+- Minimum R:R raised to 2.0.
+
+### Removed
+- The confluence dashboard (replaced by the trade card).
+
 ## [2.1.0] - 2026-10-08
 
 ### Added

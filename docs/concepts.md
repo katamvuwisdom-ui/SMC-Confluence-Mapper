@@ -11,7 +11,7 @@ How each concept is defined in the code. Thresholds refer to `body` (|close − 
 | HL / LL | New swing low above / below the previous swing low |
 | BOS | Close (or wick) beyond the last unbroken swing in the direction of the current structure |
 | CHoCH | First break against the current structure direction |
-| Order block | On a bullish break, the last bearish candle at the lowest low between the broken swing high and the break (mirror for bearish). Wick range extends to the extreme; refined to the body if taller than *Max OB height × ATR* |
+| Order block | On a bullish break, the last down-close candle at the pullback low before the displacement that broke structure (mirror for bearish). Zone = that one candle's high to low (or body). Refined to the body if taller than *Max OB height × ATR*, skipped if still too tall |
 | Displacement | An FVG between the OB candle and the break, or a break candle body > 1.5 × avgBody |
 | Mean threshold | 50% of an order block |
 | Fair value gap | Bull: `low > high[2]`; bear: `high < low[2]`; gap ≥ *Min gap × ATR* |
@@ -29,25 +29,31 @@ Drawn on the current leg. For a bull leg, 0 sits at the leg high and 1 at the le
 
 ## Candlestick patterns
 
-| Pattern | Bias | Rule |
-|---|---|---|
-| Bull Engulfing | Bull | Bearish candle then bullish candle whose body covers it and is larger |
-| Bear Engulfing | Bear | Mirror |
-| Hammer | Bull | Lower wick ≥ 60% of range, body ≤ 35%, upper wick ≤ 15% |
-| Shooting Star | Bear | Upper wick ≥ 60% of range, body ≤ 35%, lower wick ≤ 15% |
-| Morning Star | Bull | Big bearish candle, small-body candle (≤ 0.5 × avgBody), bullish candle closing above the first candle's midpoint |
-| Evening Star | Bear | Mirror |
-| Bull Harami | Bull | Large bearish candle, then a smaller bullish body inside it |
-| Bear Harami | Bear | Mirror |
-| Tweezer Bottom | Bull | Bearish then bullish candle with lows within 0.05 × ATR |
-| Tweezer Top | Bear | Mirror at the highs |
-| 3 White Soldiers | Bull | Three bullish candles, rising opens and closes, bodies > 0.6 × avgBody |
-| 3 Black Crows | Bear | Mirror |
-| Bull Marubozu | Bull | Body ≥ 90% of range and > 1.2 × avgBody |
-| Bear Marubozu | Bear | Mirror |
-| Piercing Line | Bull | Large bearish candle, bullish candle opening at/below its close and closing above its midpoint (but below its open) |
-| Dark Cloud Cover | Bear | Mirror |
-| Dragonfly Doji | Bull | Body ≤ 10% of range, lower wick ≥ 2 × upper wick and ≥ 50% of range |
-| Gravestone Doji | Bear | Mirror |
+Textbook definitions (Nison, *Japanese Candlestick Charting Techniques*; Bulkowski, *Encyclopedia of Candlestick Charts*). Two rules apply to every pattern:
 
-When several patterns fire on one bar, the strongest is reported in this priority: Star → Three soldiers/crows → Engulfing → Piercing/Dark cloud → Hammer/Shooting star → Tweezer → Marubozu → Harami → Doji.
+- **Prior trend.** A reversal pattern must follow the trend it reverses. "Down" before a pattern means the bar before it closed below its 10-bar average and below the close 5 bars earlier (mirror for "up").
+- **Meaningful size.** Single-candle patterns need a range of at least 0.5 × ATR(14), so tiny candles are never labelled.
+
+| Pattern | Bias | Prior trend | Rule in code |
+|---|---|---|---|
+| Hammer | Bull | Down | Lower shadow ≥ 2 × body, upper shadow ≤ 10% of range |
+| Hanging Man | Bear | Up | Same shape as the hammer |
+| Shooting Star | Bear | Up | Upper shadow ≥ 2 × body, lower shadow ≤ 10% of range |
+| Inverted Hammer | Bull | Down | Same shape as the shooting star |
+| Bullish Engulfing | Bull | Down | Down candle, then an up candle whose real body covers it and is larger |
+| Bearish Engulfing | Bear | Up | Mirror |
+| Bullish Harami | Bull | Down | Long down candle (body ≥ average), then an up body ≤ half its size inside its body |
+| Bearish Harami | Bear | Up | Mirror |
+| Piercing Line | Bull | Down | Long down candle, then an up candle opening at/below its close and closing above its midpoint but below its open |
+| Dark Cloud Cover | Bear | Up | Mirror |
+| Morning Star | Bull | Down | Long down candle, a star (body ≤ 30% of the first) at or below its body, then an up candle closing above the first candle's midpoint |
+| Evening Star | Bear | Up | Mirror |
+| 3 White Soldiers | Bull | Down | Three long up candles, each opening inside the prior body, higher closes, small upper shadows (≤ 25% of range) |
+| 3 Black Crows | Bear | Up | Mirror |
+| Bullish / Bearish Marubozu | Either | Any | Body ≥ 90% of range and ≥ 1.3 × average body |
+| Tweezer Bottom | Bull | Down | Down then up candle, lows within 5% of range, at the 5-bar low |
+| Tweezer Top | Bear | Up | Mirror at the 5-bar high |
+| Dragonfly Doji | Bull | Down | Body ≤ 5% of range, upper shadow ≤ 10% |
+| Gravestone Doji | Bear | Up | Body ≤ 5% of range, lower shadow ≤ 10% |
+
+When several patterns fire on one bar, the strongest is reported: Star → Three soldiers/crows → Engulfing → Piercing/Dark cloud → Hammer/Shooting star → Inverted hammer/Hanging man → Tweezer → Marubozu → Harami → Doji.

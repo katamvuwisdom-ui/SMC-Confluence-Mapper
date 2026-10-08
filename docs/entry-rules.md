@@ -34,16 +34,27 @@ Order block quality filters:
 - A new OB that overlaps an active OB on the same side is skipped (no stacked boxes). Same for FVGs.
 - An OB is invalidated when a candle closes through its far side. An FVG is removed at 50% fill (CE) or full fill, per setting.
 
-## 4. Scoring
+## 4. Entry model: Sweep → Shift → Retrace (default)
+
+The core SMC sequence, all within *Setup window* bars:
+
+1. **Sweep** — price takes liquidity: dips under a swing low (SSL) for buys, or spikes above a swing high (BSL) for sells, and closes back inside.
+2. **Shift** — after the sweep, price breaks structure the other way (BOS / CHoCH).
+3. **Retrace** — price pulls back into an order block, FVG or the OTE zone and a confirmation candle closes there.
+
+Switch *Entry model* to *Confluence score only* to drop the sweep → shift requirement.
+
+## 5. Scoring
 
 Each true factor adds 1 point. 7 core factors, plus HTF bias and killzone when enabled (max 9).
 
-## 5. Signal conditions (all must pass)
+## 6. Signal conditions (all must pass)
 
 **BUY**
 
 1. Bar is closed.
 2. If *One trade at a time*: no limit order pending and no trade open.
+3. With the default model: a sell-side sweep followed by a bullish structure break, both within the setup window.
 3. If *Require structure*: last structure break was bullish.
 4. If *Require POI*: bull OB, bull FVG or OTE zone tapped on this bar.
 5. If *Require candle*: a bullish candlestick pattern closed on this bar.
@@ -54,7 +65,7 @@ Each true factor adds 1 point. 7 core factors, plus HTF bias and killzone when e
 
 **SELL** is the mirror image.
 
-## 6. Order type: MARKET or LIMIT
+## 7. Order type: MARKET or LIMIT
 
 1. **Entry zone** = the tapped OB, else the tapped FVG, else the OTE zone, else the signal candle.
 2. **Optimal limit price** inside that zone, per *Limit price inside zone*:
@@ -68,12 +79,12 @@ Each true factor adds 1 point. 7 core factors, plus HTF bias and killzone when e
    - **LIMIT** at the optimal price otherwise (price has already moved away, or chasing it ruins the R:R).
 5. *Market only* / *Limit only* force one type.
 
-## 7. Targets
+## 8. Targets
 
 - **TP1** = the nearest resting liquidity at least *TP1 must be at least (R)* away: the nearest BSL/EQH pool or the leg high for buys (SSL/EQL or leg low for sells). Falls back to 2R.
 - **TP2** = the next pool beyond TP1, else the Fibonacci extension (default −0.272), else TP1 + 1R.
 
-## 8. Trade management (tracked bar by bar)
+## 9. Trade management (tracked bar by bar)
 
 | Event | Rule |
 |---|---|
@@ -87,7 +98,7 @@ Each true factor adds 1 point. 7 core factors, plus HTF bias and killzone when e
 
 If SL and a target are touched in the same candle, the stop is assumed first (conservative). The dashboard's **Results** row adds up every filled trade on the loaded chart history in R. It uses candle highs and lows only, with no spread or slippage, so treat it as a quick sanity check, not a full backtest.
 
-## 9. HTF bias and killzones (optional)
+## 10. HTF bias and killzones (optional)
 
 - HTF bias: the same swing-break logic on the chosen higher timeframe, using its last closed bar.
 - Killzones: London (02:00–05:00) and New York (07:00–10:00), New York time by default. When enabled, a signal inside a killzone gains one point.
