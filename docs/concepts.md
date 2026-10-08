@@ -11,10 +11,17 @@ How each concept is defined in the code. Thresholds refer to `body` (|close − 
 | HL / LL | New swing low above / below the previous swing low |
 | BOS | Close (or wick) beyond the last unbroken swing in the direction of the current structure |
 | CHoCH | First break against the current structure direction |
-| Order block | On a bullish break, the candle with the lowest low between the broken swing high and the break bar (mirror for bearish). Range = wick or body per setting |
+| Order block | On a bullish break, the last bearish candle at the lowest low between the broken swing high and the break (mirror for bearish). Wick range extends to the extreme; refined to the body if taller than *Max OB height × ATR* |
+| Displacement | An FVG between the OB candle and the break, or a break candle body > 1.5 × avgBody |
+| Mean threshold | 50% of an order block |
 | Fair value gap | Bull: `low > high[2]`; bear: `high < low[2]`; gap ≥ *Min gap × ATR* |
+| Consequent encroachment (CE) | 50% of a fair value gap |
 | Premium / discount | Above / below the 50% (equilibrium) of the current leg |
-| Liquidity sweep | Wick through the recent *Liquidity lookback* extreme with a close back inside |
+| OTE | Optimal trade entry: the 0.618–0.786 retracement of the leg, 0.705 as the sweet spot |
+| BSL / SSL | Buy-side liquidity above a confirmed swing high / sell-side below a swing low |
+| EQH / EQL | Two swing highs / lows within *tolerance × ATR*: a stronger liquidity pool |
+| Liquidity sweep | Wick through a pool with a close back inside it |
+| Killzone | London 02:00–05:00 and New York 07:00–10:00, New York time |
 
 ## Fibonacci
 
