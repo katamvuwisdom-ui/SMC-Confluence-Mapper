@@ -1,6 +1,6 @@
 //@version=6
 // ════════════════════════════════════════════════════════════════════════════
-//  SMC Confluence Mapper  v2.0
+//  SMC Confluence Mapper  v2.1
 //  Smart Money Concepts + liquidity + candlestick confirmation + Fibonacci,
 //  scored into trade plans that choose MARKET or LIMIT execution and track
 //  every setup to its outcome (fill, TP1, BE, TP2, SL, missed, expired).
