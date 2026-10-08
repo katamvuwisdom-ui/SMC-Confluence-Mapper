@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.1.0] - 2026-10-08
+
+### Added
+- Minimum stop loss (default 30 pips): structural stops closer than this are moved out.
+- Target caps: TP1 at most 3R, TP2 at most 5R (both adjustable), so targets stay realistic.
+- Expected path drawn as market legs (impulse, pullback, impulse) with an arrow, instead of straight lines.
+
+### Fixed
+- Compiler warnings from prior-trend checks inside conditional expressions.
+
 ## [3.0.0] - 2026-10-08
 
 ### Added

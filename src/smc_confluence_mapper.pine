@@ -1,6 +1,6 @@
 //@version=6
 // ════════════════════════════════════════════════════════════════════════════
-//  SMC Confluence Mapper  v3.0
+//  SMC Confluence Mapper  v3.1
 //  Smart Money Concepts trade planner: liquidity sweep → structure shift →
 //  retrace into an order block / FVG / OTE, confirmed by textbook candlestick
 //  patterns. Every setup is planned as MARKET or LIMIT, explained in plain
@@ -88,6 +88,9 @@ limitAt      = input.string("50% of zone", "Limit price inside zone", options = 
 mktTolAtr    = input.float(0.3, "Market entry if close is within (× ATR) of limit", minval = 0.0, maxval = 5.0, step = 0.05, group = G_ORD)
 limitExpiry  = input.int(10, "Limit order expires after (bars)", minval = 1, maxval = 200, group = G_ORD)
 tp1MinR      = input.float(1.0, "TP1 must be at least (R) away", minval = 0.1, maxval = 10.0, step = 0.1, group = G_ORD)
+minSlPips    = input.float(30.0, "Minimum stop loss (pips)", minval = 0.0, maxval = 1000.0, step = 1.0, group = G_ORD, tooltip = "If the structural stop is closer than this, it is moved out to this distance so normal noise does not stop the trade out.")
+maxTp1R      = input.float(3.0, "Cap TP1 at (R)", minval = 0.5, maxval = 20.0, step = 0.1, group = G_ORD, tooltip = "Keeps the first target realistic: a liquidity target further than this is brought in to this many R.")
+maxTp2R      = input.float(5.0, "Cap TP2 at (R)", minval = 0.5, maxval = 30.0, step = 0.1, group = G_ORD)
 tp1Pct       = input.int(50, "Close % at TP1", minval = 0, maxval = 100, group = G_ORD)
 beAfterTp1   = input.bool(true, "Move SL to entry after TP1", group = G_ORD)
 maxLife      = input.int(100, "Close trade after (bars)", minval = 5, maxval = 1000, group = G_ORD)
@@ -886,8 +889,10 @@ bool poiS = fOBS or fFVGS or fGZS
 // ─────────────────────────────────────────────────────────────────────────────
 // Trade planning: liquidity-based targets, market vs limit execution
 // ─────────────────────────────────────────────────────────────────────────────
-// [risk, TP1, TP2, R:R to TP1] for an entry price and stop.
-planTrade(int dir, float entry, float slPx) =>
+// [risk, TP1, TP2, R:R to TP1, stop] for an entry price and structural stop.
+planTrade(int dir, float entry, float slStruct) =>
+    // Stop at least minSlPips away from entry
+    float slPx = dir == 1 ? math.min(slStruct, entry - minSlPips * PIP) : math.max(slStruct, entry + minSlPips * PIP)
     float risk = dir == 1 ? entry - slPx : slPx - entry
     float tp1  = na
     float tp2  = na
@@ -903,8 +908,16 @@ planTrade(int dir, float entry, float slPx) =>
         float c2  = dir == 1 ? nearestPool(bslPools, tp1 + risk * 0.5, true) : nearestPool(sslPools, tp1 - risk * 0.5, false)
         float ext = fibValid and legDir == dir ? fibLevel(legHigh, legLow, legDir, -extLevel) : na
         tp2 := not na(c2) ? c2 : (not na(ext) and dir * (ext - tp1) > 0 ? ext : tp1 + dir * risk)
+        // Keep targets realistic
+        if dir * (tp1 - entry) > maxTp1R * risk
+            tp1 := entry + dir * maxTp1R * risk
+        float cap2 = entry + dir * math.max(maxTp2R, maxTp1R + 0.5) * risk
+        if dir * (tp2 - cap2) > 0
+            tp2 := cap2
+        if dir * (tp2 - tp1) < risk * 0.5
+            tp2 := tp1 + dir * risk * 0.5
     float rr = risk > 0 ? math.abs(tp1 - entry) / risk : 0.0
-    [risk, tp1, tp2, rr]
+    [risk, tp1, tp2, rr, slPx]
 
 // Entry zone: the tapped OB first, then FVG, then OTE zone, else the signal candle
 float zTopB = fOBB ? bullOBTop : fFVGB ? bullFVGTop : fGZB ? gzTop : math.max(open, close)
@@ -924,10 +937,10 @@ float limS = math.min(math.max(limitAt == "Proximal edge" ? zBtmS : limitAt == "
 float slB = math.min(zBtmB, low, bullSweep ? lastBullSweepPx : low) - atr * slAtrBuf
 float slS = math.max(zTopS, high, bearSweep ? lastBearSweepPx : high) + atr * slAtrBuf
 
-[riskBM, tp1BM, tp2BM, rrBM] = planTrade(1, close, slB)
-[riskBL, tp1BL, tp2BL, rrBL] = planTrade(1, limB, slB)
-[riskSM, tp1SM, tp2SM, rrSM] = planTrade(-1, close, slS)
-[riskSL, tp1SL, tp2SL, rrSL] = planTrade(-1, limS, slS)
+[riskBM, tp1BM, tp2BM, rrBM, slBM] = planTrade(1, close, slB)
+[riskBL, tp1BL, tp2BL, rrBL, slBL] = planTrade(1, limB, slB)
+[riskSM, tp1SM, tp2SM, rrSM, slSM] = planTrade(-1, close, slS)
+[riskSL, tp1SL, tp2SL, rrSL, slSL] = planTrade(-1, limS, slS)
 
 // Market when price is still at the optimal price and R:R holds; otherwise wait with a limit
 bool nearB = close - limB <= mktTolAtr * atr
@@ -940,11 +953,13 @@ float riskB = mktB ? riskBM : riskBL
 float tp1B  = mktB ? tp1BM : tp1BL
 float tp2B  = mktB ? tp2BM : tp2BL
 float rrB   = mktB ? rrBM : rrBL
+float sFinB = mktB ? slBM : slBL
 float entS  = mktS ? close : limS
 float riskS = mktS ? riskSM : riskSL
 float tp1S  = mktS ? tp1SM : tp1SL
 float tp2S  = mktS ? tp2SM : tp2SL
 float rrS   = mktS ? rrSM : rrSL
+float sFinS = mktS ? slSM : slSL
 
 var int lastBuyBar  = na
 var int lastSellBar = na
@@ -1003,7 +1018,7 @@ reasons(bool up, bool fTr, bool fSw, bool fOb, bool fFvg, bool fGz, bool fPd, bo
 planText(bool up, bool mkt, float entry, float sl, float tp1, float tp2) =>
     string side = up ? "Buy" : "Sell"
     string s = mkt ? side + " now at " + px(entry) + ".\n" : "Place a " + str.upper(side) + " LIMIT at " + px(entry) + " (" + fmtPips(entry - close) + " from price).\n   Cancel it if not filled within " + str.tostring(limitExpiry) + " bars,\n   or if price reaches Target 1 first.\n"
-    s += "Stop loss at " + px(sl) + " (" + fmtPips(entry - sl) + ") — " + (up ? "below" : "above") + " the zone.\n   If price gets there, the idea is wrong.\n"
+    s += "Stop loss at " + px(sl) + " (" + fmtPips(entry - sl) + ") — " + (up ? "below" : "above") + " the zone" + (minSlPips > 0 ? ",\n   never closer than " + str.tostring(minSlPips) + " pips" : "") + ".\n   If price gets there, the idea is wrong.\n"
     s += tp1Pct >= 100 ? "Close everything at Target 1 " + px(tp1) + "." : "Take " + str.tostring(tp1Pct) + "% at Target 1 " + px(tp1) + (beAfterTp1 ? ",\n   then move the stop to entry (no-loss trade)" : "") + ";\n   let the rest run to Target 2 " + px(tp2) + "."
     s
 
@@ -1016,7 +1031,7 @@ if buySignal or sellSignal
     bool   up    = buySignal
     bool   mkt   = up ? mktB : mktS
     float  ent   = up ? entB : entS
-    float  sl    = up ? slB : slS
+    float  sl    = up ? sFinB : sFinS
     float  tp1   = up ? tp1B : tp1S
     float  tp2   = up ? tp2B : tp2S
     float  rr    = up ? rrB : rrS
@@ -1065,6 +1080,16 @@ if showBearPat
 // Last-bar drawings: Fibonacci, OTE zone, premium / discount, expected path
 // ─────────────────────────────────────────────────────────────────────────────
 var array<float> FIB_LEVELS = array.from(0.0, 0.5, 0.618, 0.705, 0.786, 1.0)
+var polyline     pathLine   = na
+
+// One market leg from y0 to y1 over n bars: push 60% of the way, pull back to 35%, then finish.
+// Returns the end point.
+addLeg(array<chart.point> pts, int x0, float y0, float y1, int n) =>
+    float d = y1 - y0
+    pts.push(chart.point.from_index(x0 + int(math.round(n * 0.35)), y0 + d * 0.6))
+    pts.push(chart.point.from_index(x0 + int(math.round(n * 0.55)), y0 + d * 0.35))
+    pts.push(chart.point.from_index(x0 + n, y1))
+    [x0 + n, y1]
 var array<line>  lastLines  = array.new<line>()
 var array<label> lastLabels = array.new<label>()
 var array<box>   lastBoxes  = array.new<box>()
@@ -1094,21 +1119,27 @@ if barstate.islast
             lastBoxes.push(box.new(x1, legHigh, xe, eqLeg, border_color = NOCOLOR, bgcolor = color.new(bearColor, 95), text = "Premium", text_size = mapSize, text_color = txtCol, text_halign = text.align_right, text_valign = text.align_top))
             lastBoxes.push(box.new(x1, eqLeg, xe, legLow, border_color = NOCOLOR, bgcolor = color.new(bullColor, 95), text = "Discount", text_size = mapSize, text_color = txtCol, text_halign = text.align_right, text_valign = text.align_bottom))
 
-    // Expected path for the live setup: now → entry (if a limit is waiting) → TP1 → TP2
+    // Expected path for the live setup, drawn as market legs (impulse → pullback → impulse)
+    if not na(pathLine)
+        pathLine.delete()
     if showPath and trades.size() > 0
         Trade t = trades.get(0)
         if t.state != 2
-            int   x0 = bar_index
-            float y0 = close
+            array<chart.point> pts = array.new<chart.point>()
+            pts.push(chart.point.from_index(bar_index, close))
+            int   x  = bar_index
+            float y  = close
+            // A limit order first needs price to come back to the entry
             if t.state == 0
-                lastLines.push(line.new(x0, y0, x0 + 4, t.entry, color = pathColor, style = line.style_dashed, width = 2))
-                x0 := x0 + 4
-                y0 := t.entry
+                [xa, ya] = addLeg(pts, x, y, t.entry, 6)
+                x := xa
+                y := ya
             if not t.tp1Hit
-                lastLines.push(line.new(x0, y0, x0 + 8, t.tp1, color = pathColor, style = line.style_dashed, width = 2))
-                x0 := x0 + 8
-                y0 := t.tp1
-            lastLines.push(line.new(x0, y0, x0 + 8, t.tp2, color = pathColor, style = line.style_arrow_right, width = 2))
+                [xb, yb] = addLeg(pts, x, y, t.tp1, 10)
+                x := xb
+                y := yb
+            [xc, yc] = addLeg(pts, x, y, t.tp2, 10)
+            pathLine := polyline.new(pts, curved = false, line_color = pathColor, line_style = line.style_arrow_right, line_width = 2)
             lastLabels.push(label.new(bar_index, close, "Expected path", style = t.dir == 1 ? label.style_label_up : label.style_label_down, color = color.new(pathColor, 10), textcolor = color.black, size = mapSize))
 
 // ─────────────────────────────────────────────────────────────────────────────
