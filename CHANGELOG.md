@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.2.0] - 2026-10-09
+
+### Added
+- Entry zone highlighted (dashed yellow box) and a diamond marker at the exact entry coordinate (price and time).
+- Solid yellow entry badge: order type, price, when it was placed and, for limits, when it expires; updates to "filled" with the fill time.
+- "FILLED" marker on the candle where a limit order fills.
+- Dotted box around exactly the 1, 2 or 3 candles that form each candlestick pattern; pattern name on the signal label.
+- Expected path passes through the limit entry ("LIMIT ENTRY" marker) before the TP1 and TP2 legs, each marked.
+- One copy-ready text block per signal (entry with order type and times, SL, TP1, TP2 in pips and R, reasons, plan), sent to the alert message and Pine Logs.
+
+### Changed
+- Trade card: the ENTRY row is a solid yellow row with the order type and its times.
+
 ## [3.1.0] - 2026-10-08
 
 ### Added

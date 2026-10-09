@@ -1,6 +1,6 @@
 //@version=6
 // ════════════════════════════════════════════════════════════════════════════
-//  SMC Confluence Mapper  v3.1
+//  SMC Confluence Mapper  v3.2
 //  Smart Money Concepts trade planner: liquidity sweep → structure shift →
 //  retrace into an order block / FVG / OTE, confirmed by textbook candlestick
 //  patterns. Every setup is planned as MARKET or LIMIT, explained in plain
@@ -76,6 +76,7 @@ useThree     = input.bool(true, "3 Soldiers / 3 Crows", group = G_CDL, inline = 
 useMarubozu  = input.bool(true, "Marubozu", group = G_CDL, inline = "c4")
 usePiercing  = input.bool(true, "Piercing / Dark cloud", group = G_CDL, inline = "c4")
 useDoji      = input.bool(true, "Dragonfly / Gravestone doji", group = G_CDL, inline = "c5")
+showPatBox   = input.bool(true, "Box the candles that form the pattern", group = G_CDL, tooltip = "Draws a dotted box around exactly the 1, 2 or 3 candles that make up the pattern, so anyone can see which candles it refers to.")
 
 showFib      = input.bool(true, "Draw Fibonacci on the current leg", group = G_FIB)
 gzStart      = input.float(0.618, "OTE zone start", minval = 0.0, maxval = 1.0, step = 0.001, group = G_FIB)
@@ -96,6 +97,7 @@ beAfterTp1   = input.bool(true, "Move SL to entry after TP1", group = G_ORD)
 maxLife      = input.int(100, "Close trade after (bars)", minval = 5, maxval = 1000, group = G_ORD)
 keepSetups   = input.int(2, "Finished trades kept on chart", minval = 0, maxval = 20, group = G_ORD)
 showPath     = input.bool(true, "Draw the expected path", group = G_ORD)
+showZoneBox  = input.bool(true, "Highlight the entry zone", group = G_ORD)
 
 useHtf       = input.bool(false, "Count higher-timeframe structure as a factor", group = G_HTF)
 htfTf        = input.timeframe("240", "HTF timeframe", group = G_HTF)
@@ -182,7 +184,9 @@ type Trade
     int    state
     int    startBar
     int    startTime
+    int    expiryTime
     int    fillBar
+    int    fillTime
     float  entry
     float  sl
     float  slInit
@@ -207,6 +211,9 @@ type Trade
     label  lbSl     = na
     label  lbTp1    = na
     label  lbTp2    = na
+    box    bxZone   = na
+    label  lbMark   = na
+    label  lbFill   = na
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Zone methods (order blocks & FVGs)
@@ -347,6 +354,8 @@ method extendTo(Trade t, int x) =>
     t.lbSl.set_x(x)
     t.lbTp1.set_x(x)
     t.lbTp2.set_x(x)
+    if not na(t.bxZone)
+        t.bxZone.set_right(x)
 
 method erase(Trade t) =>
     t.bxRisk.delete()
@@ -359,6 +368,9 @@ method erase(Trade t) =>
     t.lbSl.delete()
     t.lbTp1.delete()
     t.lbTp2.delete()
+    t.bxZone.delete()
+    t.lbMark.delete()
+    t.lbFill.delete()
 
 method finish(Trade t, string outcome, float res, bool wasFilled) =>
     t.state   := 2
@@ -370,6 +382,9 @@ method finish(Trade t, string outcome, float res, bool wasFilled) =>
     t.lbTp1.delete()
     t.lbTp2.delete()
     if wasFilled
+        if not na(t.bxZone)
+            t.bxZone.set_bgcolor(color.new(entryColor, 95))
+            t.bxZone.set_text("")
         t.bxRisk.set_bgcolor(color.new(slColor, 95))
         t.bxReward.set_bgcolor(color.new(tpColor, 95))
         color rc = res > 0 ? tpColor : res < 0 ? slColor : color.gray
@@ -381,6 +396,8 @@ method finish(Trade t, string outcome, float res, bool wasFilled) =>
         t.lnSl.delete()
         t.lnTp1.delete()
         t.lnTp2.delete()
+        t.bxZone.delete()
+        t.lbMark.delete()
         t.lnEntry.set_color(color.new(color.gray, 40))
         t.lbEntry.set_text("Limit " + str.lower(outcome))
         t.lbEntry.set_color(color.new(color.gray, 30))
@@ -396,9 +413,12 @@ method step(Trade t) =>
         bool didFill = t.dir == 1 ? low <= t.entry : high >= t.entry
         bool ranAway = t.dir == 1 ? high >= t.tp1 : low <= t.tp1
         if didFill
-            t.state   := 1
-            t.fillBar := bar_index
+            t.state    := 1
+            t.fillBar  := bar_index
+            t.fillTime := time
             t.lnEntry.set_style(line.style_solid)
+            t.lbEntry.set_text((t.dir == 1 ? "▶ BUY LIMIT  " : "▶ SELL LIMIT  ") + px(t.entry) + "\nfilled " + str.format_time(time, "dd MMM HH:mm", syminfo.timezone))
+            t.lbFill := label.new(bar_index, t.entry, "✔ FILLED  " + px(t.entry), style = t.dir == 1 ? label.style_label_up : label.style_label_down, color = color.new(entryColor, 10), textcolor = color.black, size = mapSize, tooltip = "Limit order filled at " + px(t.entry) + " on " + str.format_time(time, "dd MMM yyyy HH:mm", syminfo.timezone))
             ev := "filled"
         else if ranAway
             t.finish("Missed", 0.0, false)
@@ -436,21 +456,25 @@ method step(Trade t) =>
                 ev := "timeout"
     ev
 
-newTrade(int dir, bool mkt, float entry, float sl, float tp1, float tp2) =>
+newTrade(int dir, bool mkt, float entry, float sl, float tp1, float tp2, float zTop, float zBtm, int expiry) =>
     int    x2   = bar_index + 8
     float  risk = math.abs(entry - sl)
     float  r1   = risk > 0 ? math.abs(tp1 - entry) / risk : 0.0
     float  r2   = risk > 0 ? math.abs(tp2 - entry) / risk : 0.0
     string when = str.format_time(time, "dd MMM HH:mm", syminfo.timezone)
     string side = (dir == 1 ? "BUY " : "SELL ") + (mkt ? "MARKET" : "LIMIT")
-    Trade t = Trade.new(dir = dir, isMarket = mkt, state = mkt ? 1 : 0, startBar = bar_index, startTime = time, fillBar = mkt ? bar_index : na, entry = entry, sl = sl, slInit = sl, tp1 = tp1, tp2 = tp2)
+    Trade t = Trade.new(dir = dir, isMarket = mkt, state = mkt ? 1 : 0, startBar = bar_index, startTime = time, expiryTime = expiry, fillBar = mkt ? bar_index : na, fillTime = mkt ? time : na, entry = entry, sl = sl, slInit = sl, tp1 = tp1, tp2 = tp2)
+    if showZoneBox and zTop > zBtm
+        t.bxZone := box.new(bar_index, zTop, x2, zBtm, border_color = color.new(entryColor, 30), border_width = 1, border_style = line.style_dashed, bgcolor = color.new(entryColor, 85), text = "ENTRY ZONE", text_size = mapSize, text_color = txtCol, text_halign = text.align_left, text_valign = text.align_top)
     t.bxRisk   := box.new(bar_index, math.max(entry, sl), x2, math.min(entry, sl), border_color = NOCOLOR, border_width = 0, bgcolor = color.new(slColor, 90))
     t.bxReward := box.new(bar_index, math.max(entry, tp1), x2, math.min(entry, tp1), border_color = NOCOLOR, border_width = 0, bgcolor = color.new(tpColor, 90))
-    t.lnEntry  := line.new(bar_index, entry, x2, entry, color = entryColor, width = lineW + 1, style = mkt ? line.style_solid : line.style_dashed)
+    t.lnEntry  := line.new(bar_index, entry, x2, entry, color = entryColor, width = lineW + 2, style = mkt ? line.style_solid : line.style_dashed)
     t.lnSl     := line.new(bar_index, sl, x2, sl, color = slColor, width = lineW + 1, style = line.style_solid)
     t.lnTp1    := line.new(bar_index, tp1, x2, tp1, color = tpColor, width = lineW + 1, style = line.style_solid)
     t.lnTp2    := line.new(bar_index, tp2, x2, tp2, color = tpColor, width = lineW, style = line.style_dashed)
-    t.lbEntry  := label.new(x2, entry, side + "  " + px(entry) + "  ·  " + when, style = label.style_label_left, color = color.new(entryColor, 10), textcolor = color.black, size = tradeSize)
+    string eTxt = mkt ? "▶ " + side + "  " + px(entry) + "\nfilled " + when : "▶ " + side + "  " + px(entry) + "\nplaced " + when + "  ·  valid to " + str.format_time(expiry, "dd MMM HH:mm", syminfo.timezone)
+    t.lbEntry  := label.new(x2, entry, eTxt, style = label.style_label_left, color = entryColor, textcolor = color.black, size = tradeSize)
+    t.lbMark   := label.new(bar_index, entry, "", style = label.style_diamond, color = entryColor, size = size.small, tooltip = "Entry coordinate: " + px(entry) + " at " + str.format_time(time, "dd MMM yyyy HH:mm", syminfo.timezone))
     t.lbSl     := label.new(x2, sl, "SL  " + px(sl) + "  ·  -" + fmtPips(risk) + "  ·  -1R", style = label.style_label_left, color = color.new(slColor, 10), textcolor = txtCol, size = tradeSize)
     t.lbTp1    := label.new(x2, tp1, "TP1  " + px(tp1) + "  ·  +" + fmtPips(tp1 - entry) + "  ·  " + str.tostring(r1, "#.#") + "R", style = label.style_label_left, color = color.new(tpColor, 10), textcolor = color.black, size = tradeSize)
     t.lbTp2    := label.new(x2, tp2, "TP2  " + px(tp2) + "  ·  +" + fmtPips(tp2 - entry) + "  ·  " + str.tostring(r2, "#.#") + "R", style = label.style_label_left, color = color.new(tpColor, 35), textcolor = color.black, size = tradeSize)
@@ -612,6 +636,40 @@ patMeaning(string p) =>
         "Bearish Harami"    => "buying stalled inside the last big up candle"
         "Gravestone Doji"   => "buyers were rejected all the way back down"
         => ""
+
+// How many candles each pattern is made of
+patLen(string p) =>
+    switch p
+        "Morning Star"      => 3
+        "Evening Star"      => 3
+        "3 White Soldiers"  => 3
+        "3 Black Crows"     => 3
+        "Bullish Engulfing" => 2
+        "Bearish Engulfing" => 2
+        "Piercing Line"     => 2
+        "Dark Cloud Cover"  => 2
+        "Tweezer Bottom"    => 2
+        "Tweezer Top"       => 2
+        "Bullish Harami"    => 2
+        "Bearish Harami"    => 2
+        => 1
+
+hi2 = ta.highest(high, 2)
+hi3 = ta.highest(high, 3)
+lo2 = ta.lowest(low, 2)
+lo3 = ta.lowest(low, 3)
+TFMS = timeframe.in_seconds() * 1000
+
+// Dotted box around exactly the candles that form the pattern, with its name
+markPattern(string p, bool bull, bool withName) =>
+    int   n   = patLen(p)
+    float top = n == 3 ? hi3 : n == 2 ? hi2 : high
+    float bot = n == 3 ? lo3 : n == 2 ? lo2 : low
+    color c   = bull ? bullColor : bearColor
+    if showPatBox
+        box.new(time[n - 1] - TFMS / 2, top, time + TFMS / 2, bot, xloc = xloc.bar_time, border_color = color.new(c, 10), border_width = 1, border_style = line.style_dotted, bgcolor = color.new(c, 92))
+    if withName
+        label.new(bar_index, bull ? bot : top, p, style = bull ? label.style_label_up : label.style_label_down, color = NOCOLOR, textcolor = txtCol, size = mapSize, tooltip = p + " (" + str.tostring(n) + (n == 1 ? " candle" : " candles") + "): " + patMeaning(p))
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
@@ -1039,19 +1097,36 @@ if buySignal or sellSignal
     [why, n] = reasons(up, up ? fTrendB : fTrendS, up ? fSweepB : fSweepS, up ? fOBB : fOBS, up ? fFVGB : fFVGS, up ? fGZB : fGZS, up ? fDiscB : fPremS, up ? fCandleB : fCandleS, up ? bullPat : bearPat, up ? fHtfB : fHtfS, fKZ)
     string plan  = planText(up, mkt, ent, sl, tp1, tp2)
     string side  = (up ? "BUY " : "SELL ") + (mkt ? "MARKET" : "LIMIT")
+    string pat   = up ? bullPat : bearPat
+    float  zT    = up ? zTopB : zTopS
+    float  zB    = up ? zBtmB : zBtmS
+    int    expT  = time + limitExpiry * TFMS
+    float  risk  = math.abs(ent - sl)
+    float  r2    = risk > 0 ? math.abs(tp2 - ent) / risk : 0.0
     if up
         lastBuyBar := bar_index
     else
         lastSellBar := bar_index
-    label.new(bar_index, up ? low : high, (up ? "▲ " : "▼ ") + side + "\n" + px(ent), yloc = up ? yloc.belowbar : yloc.abovebar, style = up ? label.style_label_up : label.style_label_down, color = up ? bullColor : bearColor, textcolor = txtCol, size = tradeSize, tooltip = side + "  ·  " + syminfo.ticker + " " + tfName() + "\n\nWhy (" + str.tostring(n) + " reasons):\n" + why + "\nPlan:\n" + plan)
-    Trade nt = newTrade(up ? 1 : -1, mkt, ent, sl, tp1, tp2)
+    if pat != ""
+        markPattern(pat, up, false)
+    label.new(bar_index, up ? low : high, (up ? "▲ " : "▼ ") + side + "\n" + px(ent) + (pat != "" ? "\n" + pat : ""), yloc = up ? yloc.belowbar : yloc.abovebar, style = up ? label.style_label_up : label.style_label_down, color = up ? bullColor : bearColor, textcolor = txtCol, size = tradeSize, tooltip = side + "  ·  " + syminfo.ticker + " " + tfName() + "\n\nWhy (" + str.tostring(n) + " reasons):\n" + why + "\nPlan:\n" + plan)
+    Trade nt = newTrade(up ? 1 : -1, mkt, ent, sl, tp1, tp2, zT, zB, expT)
     nt.score := sc
     nt.total := totalF
     nt.why   := why
     nt.plan  := plan
     trades.unshift(nt)
-    string when = str.format_time(time, "dd MMM yyyy HH:mm", syminfo.timezone)
-    alertText := alertFormat == "Plain text" ? side + " " + syminfo.ticker + " " + tfName() + "  (" + when + ")\nEntry " + px(ent) + "  |  SL " + px(sl) + " (" + fmtPips(ent - sl) + ")  |  TP1 " + px(tp1) + " (" + fmtPips(tp1 - ent) + ", " + str.tostring(rr, "#.#") + "R)  |  TP2 " + px(tp2) + " (" + fmtPips(tp2 - ent) + ")\n\nWhy:\n" + why + "\nPlan:\n" + plan : "{\"action\":\"" + (up ? "buy" : "sell") + "\",\"order\":\"" + (mkt ? "market" : "limit") + "\",\"symbol\":\"" + syminfo.ticker + "\",\"timeframe\":\"" + timeframe.period + "\",\"entry\":" + px(ent) + ",\"sl\":" + px(sl) + ",\"tp1\":" + px(tp1) + ",\"tp2\":" + px(tp2) + ",\"tp1_close_pct\":" + str.tostring(tp1Pct) + ",\"move_sl_to_be\":" + (beAfterTp1 ? "true" : "false") + ",\"expiry_bars\":" + str.tostring(limitExpiry) + ",\"time\":\"" + when + "\"}"
+    string when  = str.format_time(time, "dd MMM yyyy HH:mm", syminfo.timezone)
+    string whenX = str.format_time(expT, "dd MMM yyyy HH:mm", syminfo.timezone)
+    // One clean block with everything, ready to paste anywhere
+    string share = (up ? "▲ " : "▼ ") + side + " — " + syminfo.ticker + " " + tfName() + "\n"
+    share += "Entry: " + px(ent) + (mkt ? "  (market order, " + when + ")" : "  (limit order, placed " + when + ", valid until " + whenX + ")") + "\n"
+    share += "Stop loss: " + px(sl) + "  (-" + fmtPips(ent - sl) + ")\n"
+    share += "Target 1: " + px(tp1) + "  (+" + fmtPips(tp1 - ent) + ", " + str.tostring(rr, "#.#") + "R)\n"
+    share += "Target 2: " + px(tp2) + "  (+" + fmtPips(tp2 - ent) + ", " + str.tostring(r2, "#.#") + "R)\n"
+    share += "\nWhy:\n" + why + "\nPlan:\n" + plan
+    log.info(share)
+    alertText := alertFormat == "Plain text" ? share : "{\"action\":\"" + (up ? "buy" : "sell") + "\",\"order\":\"" + (mkt ? "market" : "limit") + "\",\"symbol\":\"" + syminfo.ticker + "\",\"timeframe\":\"" + timeframe.period + "\",\"entry\":" + px(ent) + ",\"sl\":" + px(sl) + ",\"tp1\":" + px(tp1) + ",\"tp2\":" + px(tp2) + ",\"tp1_close_pct\":" + str.tostring(tp1Pct) + ",\"move_sl_to_be\":" + (beAfterTp1 ? "true" : "false") + ",\"expiry_bars\":" + str.tostring(limitExpiry) + ",\"time\":\"" + when + "\"}"
 
 // Keep only the newest finished trades on the chart (live trades are never removed)
 int closedN = 0
@@ -1068,13 +1143,13 @@ if excess > 0 and trades.size() > 0
                 trades.remove(i)
                 excess -= 1
 
-// Candlestick pattern labels: text only, skipped on signal bars (the signal names the pattern)
+// Candlestick patterns: box the exact candles and name the pattern (signal bars already show both)
 bool showBullPat = candleMode != "Off" and bullCandle and not buySignal and (candleMode == "All" or poiB or bar_index == lastBullSweep)
 bool showBearPat = candleMode != "Off" and bearCandle and not sellSignal and (candleMode == "All" or poiS or bar_index == lastBearSweep)
 if showBullPat
-    label.new(bar_index, low, bullPat, yloc = yloc.belowbar, style = label.style_none, textcolor = txtCol, size = mapSize, tooltip = bullPat + ": " + patMeaning(bullPat))
+    markPattern(bullPat, true, true)
 if showBearPat
-    label.new(bar_index, high, bearPat, yloc = yloc.abovebar, style = label.style_none, textcolor = txtCol, size = mapSize, tooltip = bearPat + ": " + patMeaning(bearPat))
+    markPattern(bearPat, false, true)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Last-bar drawings: Fibonacci, OTE zone, premium / discount, expected path
@@ -1119,7 +1194,8 @@ if barstate.islast
             lastBoxes.push(box.new(x1, legHigh, xe, eqLeg, border_color = NOCOLOR, bgcolor = color.new(bearColor, 95), text = "Premium", text_size = mapSize, text_color = txtCol, text_halign = text.align_right, text_valign = text.align_top))
             lastBoxes.push(box.new(x1, eqLeg, xe, legLow, border_color = NOCOLOR, bgcolor = color.new(bullColor, 95), text = "Discount", text_size = mapSize, text_color = txtCol, text_halign = text.align_right, text_valign = text.align_bottom))
 
-    // Expected path for the live setup, drawn as market legs (impulse → pullback → impulse)
+    // Expected path for the live setup, drawn as market legs (impulse → pullback → impulse).
+    // A waiting limit order: price pulls back into the entry first, marked on the path.
     if not na(pathLine)
         pathLine.delete()
     if showPath and trades.size() > 0
@@ -1127,20 +1203,22 @@ if barstate.islast
         if t.state != 2
             array<chart.point> pts = array.new<chart.point>()
             pts.push(chart.point.from_index(bar_index, close))
-            int   x  = bar_index
-            float y  = close
-            // A limit order first needs price to come back to the entry
+            int   x = bar_index
+            float y = close
             if t.state == 0
                 [xa, ya] = addLeg(pts, x, y, t.entry, 6)
                 x := xa
                 y := ya
+                lastLabels.push(label.new(x, t.entry, "● LIMIT ENTRY  " + px(t.entry), style = label.style_label_left, color = entryColor, textcolor = color.black, size = tradeSize, tooltip = "The path expects price to come back to the limit at " + px(t.entry) + " before moving to the targets"))
             if not t.tp1Hit
                 [xb, yb] = addLeg(pts, x, y, t.tp1, 10)
                 x := xb
                 y := yb
+                lastLabels.push(label.new(x, t.tp1, "TP1", style = t.dir == 1 ? label.style_label_down : label.style_label_up, color = color.new(tpColor, 20), textcolor = color.black, size = mapSize))
             [xc, yc] = addLeg(pts, x, y, t.tp2, 10)
+            lastLabels.push(label.new(xc, t.tp2, "TP2", style = t.dir == 1 ? label.style_label_down : label.style_label_up, color = color.new(tpColor, 40), textcolor = color.black, size = mapSize))
             pathLine := polyline.new(pts, curved = false, line_color = pathColor, line_style = line.style_arrow_right, line_width = 2)
-            lastLabels.push(label.new(bar_index, close, "Expected path", style = t.dir == 1 ? label.style_label_up : label.style_label_down, color = color.new(pathColor, 10), textcolor = color.black, size = mapSize))
+            lastLabels.push(label.new(bar_index, close, t.state == 0 ? "Expected path: pullback to entry, then targets" : "Expected path to targets", style = t.dir == 1 ? label.style_label_up : label.style_label_down, color = color.new(pathColor, 10), textcolor = color.black, size = mapSize))
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Trade card: the latest setup in full, in plain language
@@ -1180,14 +1258,22 @@ if barstate.islast and showCard
         cardRow(0, side, syminfo.ticker + " · " + tfName(), status)
         table.cell_set_bgcolor(card, 0, 0, color.new(dc, 10))
         table.cell_set_bgcolor(card, 2, 0, color.new(stCol, 35))
-        cardRow(1, "Entry", px(t.entry), str.format_time(t.startTime, "dd MMM yyyy HH:mm", syminfo.timezone))
+        string fmt    = "dd MMM yyyy HH:mm"
+        string eWhen  = t.isMarket ? "Market order · filled " + str.format_time(t.startTime, fmt, syminfo.timezone) : t.state == 0 ? "Limit order · placed " + str.format_time(t.startTime, fmt, syminfo.timezone) + "\nvalid until " + str.format_time(t.expiryTime, fmt, syminfo.timezone) : t.filled ? "Limit order · filled " + str.format_time(t.fillTime, fmt, syminfo.timezone) : "Limit order · " + str.lower(t.outcome)
+        cardRow(1, "▶ ENTRY", px(t.entry), eWhen)
+        table.cell_set_text_color(card, 0, 1, color.black)
+        table.cell_set_text_color(card, 1, 1, color.black)
+        table.cell_set_text_color(card, 2, 1, color.black)
+        table.cell_set_bgcolor(card, 0, 1, entryColor)
+        table.cell_set_bgcolor(card, 2, 1, entryColor)
         cardRow(2, "Stop loss", px(t.slInit), "-" + fmtPips(risk) + "  (-1R)")
         cardRow(3, "Target 1", px(t.tp1), "+" + fmtPips(t.tp1 - t.entry) + "  (" + str.tostring(r1, "#.#") + "R)")
         cardRow(4, "Target 2", px(t.tp2), "+" + fmtPips(t.tp2 - t.entry) + "  (" + str.tostring(r2, "#.#") + "R)")
         cardRow(5, "Why this trade", t.why, str.tostring(t.score) + " / " + str.tostring(t.total) + " factors")
         cardRow(6, "The plan", t.plan, "")
         cardRow(7, "Track record", record, "on this chart")
-        table.cell_set_bgcolor(card, 1, 1, color.new(entryColor, 75))
+        cardRow(8, "Copy this signal", "Pine Logs or Alerts log", "full text, one block")
+        table.cell_set_bgcolor(card, 1, 1, entryColor)
         table.cell_set_bgcolor(card, 1, 2, color.new(slColor, 70))
         table.cell_set_bgcolor(card, 1, 3, color.new(tpColor, 70))
         table.cell_set_bgcolor(card, 1, 4, color.new(tpColor, 80))
